@@ -1,0 +1,12 @@
+{
+  "name": "recruitment-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Password-protected recruitment dashboard for Render",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}

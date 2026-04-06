@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: recruitment-dashboard
+    runtime: node
+    repo: https://github.com/KineticBusinessAI/recruitment-dashboard
+    plan: free
+    region: singapore
+    branch: main
+    autoDeployTrigger: commit
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: BASIC_AUTH_USER
+        sync: false
+      - key: BASIC_AUTH_PASS
+        sync: false
