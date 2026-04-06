@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HC Command — BPO Headcount Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Space+Mono:wght@400;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0b0f1a;--surface:#131929;--surface2:#1a2138;--border:#252d42;
+  --teal:#00d4a8;--teal-dim:rgba(0,212,168,.12);
+  --red:#ff3d5a;--red-dim:rgba(255,61,90,.12);
+  --amber:#ffa940;--amber-dim:rgba(255,169,64,.12);
+  --green:#23d18b;--green-dim:rgba(35,209,139,.1);
+  --violet:#9d7bea;--violet-dim:rgba(157,123,234,.12);
+  --text:#e4ebf5;--text2:#8896b3;--text3:#3d4f6e;
+  --fh:'Rajdhani',sans-serif;--fm:'Space Mono',monospace;--fb:'DM Sans',sans-serif;
+  --r:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--fb);min-height:100vh;font-size:14px}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;gap:16px;height:56px;position:sticky;top:0;z-index:100}
+.logo{font-family:var(--fh);font-size:20px;font-weight:700;letter-spacing:3px;color:var(--teal)}
+.logo em{color:var(--text2);font-style:normal;font-weight:500}
+.header-center{margin-left:auto;display:flex;align-items:center;gap:8px}
+.role-btn{font-family:var(--fh);font-size:12px;font-weight:600;letter-spacing:1.5px;padding:5px 14px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;transition:all .2s}
+.role-btn.active{background:var(--teal-dim);border-color:var(--teal);color:var(--teal)}
+.role-btn:hover:not(.active){border-color:var(--text3);color:var(--text)}
+.today-label{font-family:var(--fm);font-size:10px;color:var(--text3);margin-left:8px}
+nav.tabs{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;display:flex;overflow-x:auto}
+.tab{font-family:var(--fh);font-size:15px;font-weight:600;letter-spacing:1px;padding:14px 20px;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--teal);border-bottom-color:var(--teal)}
+.tab .badge{font-size:10px;background:var(--red);color:#fff;border-radius:10px;padding:1px 6px;font-family:var(--fm);font-weight:400}
+.date-strip-wrap{background:var(--surface2);border-bottom:1px solid var(--border);padding:10px 24px;overflow-x:auto}
+.date-strip{display:flex;gap:6px;width:max-content}
+.dc{font-family:var(--fh);font-size:12px;padding:7px 10px;border-radius:6px;background:transparent;border:1px solid var(--border);color:var(--text2);cursor:pointer;transition:all .15s;text-align:center;min-width:58px}
+.dc b{display:block;font-size:13px;font-weight:700}
+.dc span{display:block;font-size:9px;opacity:.65}
+.dc:hover{border-color:var(--text3);color:var(--text)}
+.dc.active{background:var(--teal-dim);border-color:var(--teal);color:var(--teal)}
+.dc.weekend{opacity:.5}
+.dc.has-sf{border-color:var(--red)!important}
+.dc.has-sp{border-color:var(--green)!important}
+.dc.has-data:not(.active){background:rgba(255,255,255,.02)}
+.month-sep{font-family:var(--fh);font-size:10px;font-weight:700;letter-spacing:2px;color:var(--text3);display:flex;align-items:center;padding:0 6px;white-space:nowrap}
+.main{padding:24px;max-width:1440px;margin:0 auto;width:100%}
+.tab-pane{display:none}.tab-pane.active{display:block}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:14px;margin-bottom:22px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px 20px;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.kpi.c-teal::before{background:var(--teal)}.kpi.c-red::before{background:var(--red)}
+.kpi.c-green::before{background:var(--green)}.kpi.c-amber::before{background:var(--amber)}
+.kpi.c-violet::before{background:var(--violet)}
+.kpi-l{font-family:var(--fh);font-size:10px;font-weight:600;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:8px}
+.kpi-v{font-family:var(--fm);font-size:34px;font-weight:700;line-height:1}
+.kpi-v.pos{color:var(--green)}.kpi-v.neg{color:var(--red)}.kpi-v.teal{color:var(--teal)}.kpi-v.neutral{color:var(--text)}.kpi-v.amber{color:var(--amber)}
+.kpi-s{font-size:11px;color:var(--text3);margin-top:5px}
+.alert{border-radius:var(--r);padding:11px 16px;margin-bottom:18px;display:flex;align-items:center;gap:10px;font-size:13px}
+.alert.danger{background:var(--red-dim);border:1px solid var(--red);color:var(--red)}
+.alert.success{background:var(--green-dim);border:1px solid var(--green);color:var(--green)}
+.alert.info{background:var(--teal-dim);border:1px solid var(--teal);color:var(--teal)}
+.alert.warn{background:var(--amber-dim);border:1px solid var(--amber);color:var(--amber)}
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:20px}
+.chart-title{font-family:var(--fh);font-size:11px;font-weight:600;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:14px}
+.chart-wrap{position:relative;height:200px}
+.full-chart{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:22px}
+.full-chart-wrap{position:relative;height:240px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:18px}
+.card-head{font-family:var(--fh);font-size:11px;font-weight:700;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.card-head .tag{font-size:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:2px 8px;border-radius:4px;letter-spacing:1px}
+.dt{width:100%;border-collapse:collapse}
+.dt th{font-family:var(--fh);font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);padding:9px 12px;text-align:left;border-bottom:1px solid var(--border);background:var(--surface2);white-space:nowrap}
+.dt th.r{text-align:right}
+.dt td{padding:9px 12px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
+.dt td.r{text-align:right;font-family:var(--fm);font-size:13px}
+.dt tr.tr{background:var(--surface2)}
+.dt tr.tr td{font-family:var(--fh);font-size:14px;font-weight:600}
+.dt tr.tr td.r{font-family:var(--fm)}
+.dt tr:hover:not(.tr) td{background:rgba(255,255,255,.015)}
+.dt tr.add-row td{background:rgba(0,212,168,.03)}
+.ni{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--fm);font-size:13px;width:90px;padding:6px 8px;border-radius:4px;text-align:right;transition:border-color .15s}
+.ni:focus{outline:none;border-color:var(--teal);background:rgba(0,212,168,.04)}
+.ni.neg{border-color:#ff3d5a55}
+.ni.wide{width:130px}
+.ni-text{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--fb);font-size:13px;padding:6px 10px;border-radius:4px;transition:border-color .15s}
+.ni-text:focus{outline:none;border-color:var(--teal)}
+.ro{color:var(--text2);font-family:var(--fm);font-size:13px}
+.net-big{border-radius:var(--r);padding:22px;text-align:center;margin-bottom:18px}
+.net-big.sf{background:var(--red-dim);border:2px solid var(--red)}
+.net-big.sp{background:var(--green-dim);border:2px solid var(--green)}
+.net-big.bal{background:var(--surface2);border:2px solid var(--border)}
+.net-lbl{font-family:var(--fh);font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--text2);margin-bottom:8px}
+.net-val{font-family:var(--fm);font-size:52px;font-weight:700;line-height:1}
+.net-big.sf .net-val{color:var(--red)}.net-big.sp .net-val{color:var(--green)}.net-big.bal .net-val{color:var(--text)}
+.net-desc{font-size:13px;color:var(--text2);margin-top:8px}
+.pipeline{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:18px}
+.pipe{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:14px;text-align:center}
+.pipe-src{font-family:var(--fh);font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pipe-n{font-family:var(--fm);font-size:28px;font-weight:700;color:var(--teal)}
+.pipe-lbl{font-size:11px;color:var(--text3);margin-top:4px}
+.val-warn{font-size:11px;color:var(--amber);margin-top:4px;display:flex;align-items:center;gap:4px}
+.btn{font-family:var(--fh);font-size:13px;font-weight:600;letter-spacing:1px;padding:7px 16px;border-radius:6px;border:1px solid;cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn-ol{background:transparent;border-color:var(--border);color:var(--text2)}
+.btn-ol:hover{border-color:var(--teal);color:var(--teal)}
+.btn-pr{background:var(--teal-dim);border-color:var(--teal);color:var(--teal)}
+.btn-pr:hover{background:rgba(0,212,168,.2)}
+.btn-sm{font-size:11px;padding:4px 10px;letter-spacing:.5px}
+.btn-del{background:transparent;border-color:var(--border);color:var(--text3);font-size:11px;padding:3px 8px}
+.btn-del:hover{border-color:var(--red);color:var(--red)}
+.action-bar{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.sf-val{color:var(--red);font-family:var(--fm);font-weight:700}
+.sp-val{color:var(--green);font-family:var(--fm);font-weight:700}
+.nt-val{color:var(--text2);font-family:var(--fm)}
+/* Batch cards */
+.batch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:18px}
+.batch-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:14px;position:relative}
+.batch-card-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px}
+.batch-name{font-family:var(--fh);font-size:16px;font-weight:700;color:var(--text)}
+.batch-date{font-family:var(--fm);font-size:10px;color:var(--text3);margin-top:2px}
+.batch-day-badge{font-family:var(--fh);font-size:11px;font-weight:700;letter-spacing:1px;padding:3px 8px;border-radius:4px;display:inline-block;margin-top:4px}
+.day-normal{background:var(--teal-dim);border:1px solid var(--teal);color:var(--teal)}
+.day-extended{background:var(--amber-dim);border:1px solid var(--amber);color:var(--amber)}
+.day-long{background:var(--red-dim);border:1px solid var(--red);color:var(--red)}
+.day-future{background:rgba(61,79,110,.2);border:1px solid var(--border);color:var(--text3)}
+.batch-count{font-family:var(--fm);font-size:28px;font-weight:700;color:var(--text);margin-top:6px}
+/* Trainee bar */
+.tr-bar-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)}
+.tr-bar-row:last-child{border-bottom:none}
+.tr-blbl{font-family:var(--fh);font-size:11px;font-weight:600;color:var(--text2);min-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tr-bar-w{flex:1;background:var(--surface2);border-radius:4px;height:7px;overflow:hidden}
+.tr-bar{height:100%;border-radius:4px;transition:width .4s;min-width:0}
+.tr-cnt{font-family:var(--fm);font-size:12px;color:var(--text);min-width:30px;text-align:right}
+/* Add row inline */
+.add-row-form{display:flex;gap:8px;align-items:center;padding:10px 0;flex-wrap:wrap}
+/* Toast */
+#toast{position:fixed;bottom:24px;right:24px;background:var(--teal);color:#0b0f1a;font-family:var(--fh);font-size:14px;font-weight:700;letter-spacing:1px;padding:10px 20px;border-radius:8px;z-index:9999;display:none;animation:fadeIn .3s}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+/* Modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:28px;width:460px;max-width:90vw}
+.modal-title{font-family:var(--fh);font-size:18px;font-weight:700;color:var(--text);margin-bottom:6px}
+.modal-sub{font-size:12px;color:var(--text3);margin-bottom:20px}
+.form-row{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+.form-lbl{font-family:var(--fh);font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3)}
+.form-input{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--fb);font-size:14px;padding:8px 12px;border-radius:5px;width:100%}
+.form-input:focus{outline:none;border-color:var(--teal)}
+.modal-actions{display:flex;gap:8px;margin-top:20px}
+@media(max-width:900px){.charts-row,.two-col{grid-template-columns:1fr}.pipeline{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">HC<em>COMMAND</em></div>
+  <div style="font-family:var(--fb);font-size:12px;color:var(--text3);margin-left:4px">BPO Headcount &amp; Recruitment Tracker</div>
+  <div class="header-center">
+    <div class="today-label" id="hdr-date">APR–MAY 2026</div>
+  </div>
+</header>
+
+<nav class="tabs">
+  <div class="tab active" onclick="switchTab('dashboard')">📊 Dashboard</div>
+  <div class="tab" onclick="switchTab('ops')">⚙️ Operations <span class="badge" id="ops-badge" style="display:none">!</span></div>
+  <div class="tab" onclick="switchTab('recruitment')">🎯 Recruitment</div>
+  <div class="tab" onclick="switchTab('trainees')">🎓 Trainees <span class="badge" id="train-badge" style="display:none" id="train-badge"></span></div>
+</nav>
+
+<div class="date-strip-wrap">
+  <div class="date-strip" id="date-strip"></div>
+</div>
+
+<div class="main">
+
+  <!-- DASHBOARD -->
+  <div class="tab-pane active" id="pane-dashboard">
+    <div class="kpi-row" id="kpi-row"></div>
+    <div id="dash-alert"></div>
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-title">Campaign Distribution — Selected Date</div>
+        <div class="chart-wrap"><canvas id="chart-dist"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Applications by Source — Selected Date</div>
+        <div class="chart-wrap"><canvas id="chart-apps"></canvas></div>
+      </div>
+    </div>
+    <div class="full-chart">
+      <div class="chart-title">Monthly Overview — Target vs Active Agents (Apr 3 – May 31)</div>
+      <div class="full-chart-wrap"><canvas id="chart-monthly"></canvas></div>
+    </div>
+    <div class="full-chart">
+      <div class="chart-title">Net Shortfall / Surplus Across Period</div>
+      <div class="full-chart-wrap" style="height:160px"><canvas id="chart-net"></canvas></div>
+    </div>
+    <div class="full-chart">
+      <div class="chart-title">Training Pipeline — All Batches (Apr 3 – May 31)</div>
+      <div class="full-chart-wrap"><canvas id="chart-trainees"></canvas></div>
+    </div>
+  </div>
+
+  <!-- OPERATIONS -->
+  <div class="tab-pane" id="pane-ops">
+    <div class="action-bar">
+      <button class="btn btn-pr" onclick="saveData()">💾 Save Data</button>
+      <button class="btn btn-ol" onclick="exportJSON()">⬇ Export JSON</button>
+      <button class="btn btn-ol" onclick="showImport()">⬆ Import JSON</button>
+    </div>
+    <div id="ops-content"></div>
+  </div>
+
+  <!-- RECRUITMENT -->
+  <div class="tab-pane" id="pane-recruitment">
+    <div id="recruitment-content"></div>
+  </div>
+
+  <!-- TRAINEES -->
+  <div class="tab-pane" id="pane-trainees">
+    <div id="trainees-content"></div>
+  </div>
+
+</div><!-- /main -->
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- IMPORT MODAL -->
+<div class="modal-overlay" id="import-modal">
+  <div class="modal">
+    <div class="modal-title">Import Data</div>
+    <div class="modal-sub">Paste the contents of a previously exported JSON file below.</div>
+    <textarea id="import-text" class="form-input" style="height:200px;resize:vertical;font-family:var(--fm);font-size:12px"></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-pr" onclick="doImport()">Import</button>
+      <button class="btn btn-ol" onclick="closeModal('import-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD CAMPAIGN MODAL -->
+<div class="modal-overlay" id="camp-modal">
+  <div class="modal">
+    <div class="modal-title">Add New Campaign / Project</div>
+    <div class="modal-sub">Enter a name for the new campaign. It will appear across the Operations and Recruitment tabs.</div>
+    <div class="form-row">
+      <label class="form-lbl">Campaign / Project Name</label>
+      <input class="form-input" id="camp-name-input" placeholder="e.g. TKV — New Wave, SA — Audio" maxlength="60">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-pr" onclick="addCampaign()">Add Campaign</button>
+      <button class="btn btn-ol" onclick="closeModal('camp-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD SOURCE MODAL -->
+<div class="modal-overlay" id="source-modal">
+  <div class="modal">
+    <div class="modal-title">Add New Job Board / Source</div>
+    <div class="modal-sub">Enter the name of the new recruitment source or job board.</div>
+    <div class="form-row">
+      <label class="form-lbl">Source Name</label>
+      <input class="form-input" id="source-name-input" placeholder="e.g. LinkedIn, OLX, Walk-in" maxlength="60">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-pr" onclick="addSource()">Add Source</button>
+      <button class="btn btn-ol" onclick="closeModal('source-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD BATCH MODAL -->
+<div class="modal-overlay" id="batch-modal">
+  <div class="modal">
+    <div class="modal-title">Add Training Batch</div>
+    <div class="modal-sub">Enter a name and the first day of training for this batch.</div>
+    <div class="form-row">
+      <label class="form-lbl">Batch Name</label>
+      <input class="form-input" id="batch-name-input" placeholder="e.g. Batch 5, Wave 2-A" maxlength="40">
+    </div>
+    <div class="form-row">
+      <label class="form-lbl">Training Start Date</label>
+      <input class="form-input" type="date" id="batch-start-input" min="2026-04-03" max="2026-05-31">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-pr" onclick="addBatch()">Add Batch</button>
+      <button class="btn btn-ol" onclick="closeModal('batch-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// DATE RANGE: Apr 3 – May 31, 2026 (59 days)
+// ═══════════════════════════════════════════════
+const DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DATES = [];
+const START = new Date(2026, 3, 3);
+for (let i = 0; i < 59; i++) {
+  const d = new Date(START);
+  d.setDate(START.getDate() + i);
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  DATES.push({
+    key: `2026-${mm}-${dd}`,
+    label: `${MONTHS[d.getMonth()]} ${d.getDate()}`,
+    short: String(d.getDate()),
+    month: MONTHS[d.getMonth()],
+    day: DAYS_SHORT[d.getDay()],
+    isWeekend: d.getDay()===0 || d.getDay()===6,
+    monthIdx: d.getMonth()
+  });
+}
+
+// Batch colors (palette for up to 12 batches)
+const BATCH_COLORS = ['#00d4a8','#ffa940','#9d7bea','#ff3d5a','#23d18b','#4aaeff','#ff6b9d','#c8e63b','#ff8c42','#a4c3f7','#e86af0','#63d6ff'];
+
+// ═══════════════════════════════════════════════
+// DEFAULT META
+// ═══════════════════════════════════════════════
+const DEFAULT_CAMPAIGNS = [
+  { id: 'tkv',      label: 'TKV' },
+  { id: 'lbbNew',   label: 'LBB — New Ego' },
+  { id: 'lbbNexus', label: 'LBB — Nexus Ego' },
+  { id: 'saPdf',    label: 'SA — PDF' },
+];
+const DEFAULT_SOURCES = ['Facebook','Indeed','Jobstreet','Employee Referral Program'];
+const DEFAULT_BATCHES = [
+  { id: 'batch-3', name: 'Batch 3', startDate: '2026-03-27' },
+  { id: 'batch-4', name: 'Batch 4', startDate: '2026-03-30' },
+];
+
+// TKV targets from original tracker (Apr 3–30)
+const TKV_APR = [63,63,63,50,50,50,75,50,0,0,106,106,106,106,106,106,0,106,106,106,106,106,106,0,106,106,106,106];
+
+// ═══════════════════════════════════════════════
+// STATE INIT
+// ═══════════════════════════════════════════════
+function mkDay() {
+  return { target:{}, active:{crossTrained:0,notCrossed:0,returnees:0,passers:0,separation:0}, distribution:{}, applications:{}, batchCounts:{} };
+}
+
+let STATE;
+try {
+  const raw = localStorage.getItem('hc-state-v2');
+  if (raw) {
+    const parsed = JSON.parse(raw);
+    // Validate it's v2 format
+    if (parsed._version === 2 && parsed.meta && parsed.dates) {
+      STATE = parsed;
+    }
+  }
+} catch(e) {}
+
+if (!STATE) {
+  STATE = {
+    _version: 2,
+    meta: {
+      campaigns: JSON.parse(JSON.stringify(DEFAULT_CAMPAIGNS)),
+      jobSources: [...DEFAULT_SOURCES],
+      batches: JSON.parse(JSON.stringify(DEFAULT_BATCHES)),
+    },
+    dates: {}
+  };
+  // Pre-populate from CSV data
+  const PRE = {
+    '2026-04-03': {
+      target: { tkv:63, lbbNew:0, lbbNexus:80, saPdf:70 },
+      active: { crossTrained:85, notCrossed:127, returnees:0, passers:0, separation:0 },
+      distribution: { tkv:60, lbbNew:0, lbbNexus:80, saPdf:20, _pool:52 },
+      applications: { 'Facebook':15, 'Indeed':10, 'Jobstreet':0, 'Employee Referral Program':6 },
+      batchCounts: { 'batch-4':19 }
+    },
+    '2026-04-04': {
+      target: { tkv:0, lbbNew:0, lbbNexus:80, saPdf:70 },
+      active: { crossTrained:85, notCrossed:127, returnees:0, passers:0, separation:0 },
+      distribution: { tkv:60, lbbNew:0, lbbNexus:80, saPdf:20, _pool:52 },
+      applications: { 'Facebook':0, 'Indeed':0, 'Jobstreet':0, 'Employee Referral Program':0 },
+      batchCounts: { 'batch-4':15 }
+    },
+    '2026-04-05': {
+      target: { tkv:0, lbbNew:0, lbbNexus:80, saPdf:70 },
+      active: { crossTrained:85, notCrossed:127, returnees:0, passers:0, separation:0 },
+      distribution: { tkv:60, lbbNew:0, lbbNexus:80, saPdf:20, _pool:52 },
+      applications: {},
+      batchCounts: { 'batch-4':12 }
+    },
+    '2026-04-06': {
+      target: { tkv:50, lbbNew:0, lbbNexus:80, saPdf:70 },
+      active: { crossTrained:112, notCrossed:100, returnees:10, passers:12, separation:-5 },
+      distribution: { tkv:50, lbbNew:0, lbbNexus:80, saPdf:70, _pool:29 },
+      applications: {},
+      batchCounts: { 'batch-3':2, 'batch-4':10 }
+    }
+  };
+  DATES.forEach((dt, i) => {
+    if (PRE[dt.key]) {
+      STATE.dates[dt.key] = PRE[dt.key];
+    } else {
+      const d = mkDay();
+      if (i < TKV_APR.length) d.target.tkv = TKV_APR[i] || 0;
+      STATE.dates[dt.key] = d;
+    }
+  });
+}
+
+// Ensure all dates exist
+DATES.forEach((dt, i) => {
+  if (!STATE.dates[dt.key]) {
+    const d = mkDay();
+    if (i < TKV_APR.length) d.target.tkv = TKV_APR[i] || 0;
+    STATE.dates[dt.key] = d;
+  }
+});
+
+let currentDate = DATES[0].key;
+let currentTab = 'dashboard';
+let charts = {};
+
+// ═══════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════
+const n = v => Number(v) || 0;
+const fmt = v => v > 0 ? '+' + v : String(v);
+const clsNet = v => v > 0 ? 'sp' : v < 0 ? 'sf' : 'bal';
+const valClass = v => v > 0 ? 'sp-val' : v < 0 ? 'sf-val' : 'nt-val';
+const slug = s => s.toLowerCase().replace(/[^a-z0-9]/g,'_').replace(/_+/g,'_').slice(0,40) + '_' + Date.now().toString(36);
+
+function totalTarget(d) {
+  return STATE.meta.campaigns.reduce((s,c) => s + n(d.target?.[c.id]), 0);
+}
+function totalActive(d) {
+  const a = d.active || {};
+  return n(a.crossTrained) + n(a.notCrossed) + n(a.returnees) + n(a.passers) + n(a.separation);
+}
+function totalDist(d) {
+  return STATE.meta.campaigns.reduce((s,c) => s + n(d.distribution?.[c.id]), 0) + n(d.distribution?._pool);
+}
+function totalApps(d) {
+  return STATE.meta.jobSources.reduce((s,src) => s + n(d.applications?.[src]), 0);
+}
+function totalBatchCount(dateKey) {
+  const d = STATE.dates[dateKey] || {};
+  return STATE.meta.batches.reduce((s,b) => s + n(d.batchCounts?.[b.id]), 0);
+}
+function recruitNeeded(target, deployed) {
+  const sf = Math.max(0, target - deployed);
+  return sf > 0 ? Math.ceil(sf * 1.2) : 0;
+}
+function totalRecruitNeeded(d) {
+  return STATE.meta.campaigns.reduce((s,c) => {
+    return s + recruitNeeded(n(d.target?.[c.id]), n(d.distribution?.[c.id]));
+  }, 0);
+}
+function trainingDay(batchStartDate, selectedKey) {
+  const start = new Date(batchStartDate);
+  const sel = new Date(selectedKey);
+  return Math.floor((sel - start) / 86400000) + 1;
+}
+function dayLabel(dayNum) {
+  if (dayNum < 1) return null; // future or not started
+  if (dayNum <= 7) return { text: `Day ${dayNum}`, cls: 'day-normal' };
+  if (dayNum <= 12) return { text: `Day ${dayNum} ✦`, cls: 'day-extended' };
+  return { text: `Day ${dayNum} ⚡`, cls: 'day-long' };
+}
+function activeBatchesOnDate(dateKey) {
+  return STATE.meta.batches.filter(b => {
+    const day = trainingDay(b.startDate, dateKey);
+    return day >= 1;
+  });
+}
+
+// ═══════════════════════════════════════════════
+// SAVE FORM → STATE
+// ═══════════════════════════════════════════════
+function saveForm() {
+  const g = id => n(document.getElementById(id)?.value);
+  const d = STATE.dates[currentDate];
+  if (!d) return;
+
+  // Target
+  STATE.meta.campaigns.forEach(c => {
+    const el = document.getElementById(`t1-${c.id}`);
+    if (el) { if (!d.target) d.target = {}; d.target[c.id] = n(el.value); }
+  });
+  // Active
+  ['crossTrained','notCrossed','returnees','passers','separation'].forEach(k => {
+    const el = document.getElementById(`t2-${k}`);
+    if (el) { if (!d.active) d.active = {}; d.active[k] = n(el.value); }
+  });
+  // Distribution
+  STATE.meta.campaigns.forEach(c => {
+    const el = document.getElementById(`t3-${c.id}`);
+    if (el) { if (!d.distribution) d.distribution = {}; d.distribution[c.id] = n(el.value); }
+  });
+  const poolEl = document.getElementById('t3-pool');
+  if (poolEl) { if (!d.distribution) d.distribution = {}; d.distribution._pool = n(poolEl.value); }
+  // Applications
+  STATE.meta.jobSources.forEach(src => {
+    const elId = 't5-' + src.replace(/[^a-z0-9]/gi,'_');
+    const el = document.getElementById(elId);
+    if (el) { if (!d.applications) d.applications = {}; d.applications[src] = n(el.value); }
+  });
+  // Batch counts
+  STATE.meta.batches.forEach(b => {
+    const el = document.getElementById(`t6-${b.id}`);
+    if (el) { if (!d.batchCounts) d.batchCounts = {}; d.batchCounts[b.id] = n(el.value); }
+  });
+}
+
+// ═══════════════════════════════════════════════
+// DATE STRIP
+// ═══════════════════════════════════════════════
+function renderDateStrip() {
+  const strip = document.getElementById('date-strip');
+  let html = '';
+  let lastMonth = null;
+  DATES.forEach(dt => {
+    if (dt.month !== lastMonth) {
+      html += `<div class="month-sep">${dt.month.toUpperCase()}</div>`;
+      lastMonth = dt.month;
+    }
+    const d = STATE.dates[dt.key] || {};
+    const tgt = totalTarget(d), act = totalActive(d);
+    const net = act - tgt;
+    let cls = 'dc';
+    if (dt.isWeekend) cls += ' weekend';
+    if (dt.key === currentDate) cls += ' active';
+    if (tgt > 0 && act > 0) {
+      cls += net < 0 ? ' has-sf' : ' has-sp';
+      cls += ' has-data';
+    } else if (tgt > 0) cls += ' has-data';
+    html += `<div class="${cls}" onclick="selectDate('${dt.key}')"><b>${dt.short}</b><span>${dt.day}</span></div>`;
+  });
+  strip.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════
+// RENDER OPS TAB
+// ═══════════════════════════════════════════════
+function renderOpsTab() {
+  const d = STATE.dates[currentDate] || {};
+  const camps = STATE.meta.campaigns;
+
+  const campRows = camps.map(c => `
+    <tr>
+      <td style="font-family:var(--fh);font-size:14px;font-weight:600">${c.label}
+        <button class="btn btn-del btn-sm" style="margin-left:8px" onclick="removeCampaign('${c.id}')">✕</button>
+      </td>
+      <td class="r"><input class="ni" type="number" id="t1-${c.id}" value="${n(d.target?.[c.id])}" oninput="recalc()"></td>
+    </tr>`).join('');
+
+  const distRows = camps.map(c => `
+    <tr>
+      <td style="font-family:var(--fh);font-size:13px">${c.label}</td>
+      <td class="r"><input class="ni" type="number" id="t3-${c.id}" value="${n(d.distribution?.[c.id])}" oninput="recalc()"></td>
+    </tr>`).join('');
+
+  document.getElementById('ops-content').innerHTML = `
+    <!-- T1 -->
+    <div class="card">
+      <div class="card-head">TABLE 1 — Target Headcount <span class="tag">OPS / ABI</span></div>
+      <table class="dt">
+        <thead><tr><th>Campaign / Project</th><th class="r">Target</th></tr></thead>
+        <tbody>
+          ${campRows}
+          <tr class="tr"><td>TOTAL TARGET</td><td class="r" id="t1-total">0</td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:12px">
+        <button class="btn btn-ol btn-sm" onclick="openModal('camp-modal');document.getElementById('camp-name-input').value=''">+ Add Campaign / Project</button>
+      </div>
+    </div>
+
+    <!-- T2 -->
+    <div class="card">
+      <div class="card-head">TABLE 2 — Current Active Agents <span class="tag">OPS / ABI</span></div>
+      <table class="dt">
+        <thead><tr><th>Type</th><th class="r">Count</th></tr></thead>
+        <tbody>
+          <tr><td>Cross-Trained</td><td class="r"><input class="ni" type="number" id="t2-crossTrained" value="${n(d.active?.crossTrained)}" oninput="recalc()"></td></tr>
+          <tr><td>Not Cross-Trained</td><td class="r"><input class="ni" type="number" id="t2-notCrossed" value="${n(d.active?.notCrossed)}" oninput="recalc()"></td></tr>
+          <tr><td>Returnees</td><td class="r"><input class="ni" type="number" id="t2-returnees" value="${n(d.active?.returnees)}" oninput="recalc()"></td></tr>
+          <tr><td>Passers</td><td class="r"><input class="ni" type="number" id="t2-passers" value="${n(d.active?.passers)}" oninput="recalc()"></td></tr>
+          <tr><td>Separation <span style="font-size:11px;color:var(--text3)">(negative)</span></td><td class="r"><input class="ni neg" type="number" id="t2-separation" value="${n(d.active?.separation)}" oninput="recalc()"></td></tr>
+          <tr class="tr"><td>TOTAL ACTIVE</td><td class="r" id="t2-total">0</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- T3 -->
+    <div class="card">
+      <div class="card-head">TABLE 3 — Distribution of Active Agents <span class="tag">OPS / ABI</span></div>
+      <div id="dist-warn" style="display:none" class="val-warn" style="margin-bottom:10px">⚠️ Distribution total does not match Active Agents</div>
+      <table class="dt">
+        <thead><tr><th>Campaign / Project</th><th class="r">Assigned</th></tr></thead>
+        <tbody>
+          ${distRows}
+          <tr><td style="color:var(--text2)">Pool / Reserved</td><td class="r"><input class="ni" type="number" id="t3-pool" value="${n(d.distribution?._pool)}" oninput="recalc()"></td></tr>
+          <tr class="tr"><td>TOTAL DISTRIBUTION</td><td class="r" id="t3-total">0</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- NET -->
+    <div class="net-big bal" id="net-indicator">
+      <div class="net-lbl">Net (Shortfall) / Surplus</div>
+      <div class="net-val" id="net-val">—</div>
+      <div class="net-desc" id="net-desc">Fill in targets and active agents above</div>
+    </div>`;
+
+  recalcDisplayOnly();
+}
+
+// ═══════════════════════════════════════════════
+// RENDER RECRUITMENT TAB
+// ═══════════════════════════════════════════════
+function renderRecruitmentTab() {
+  const d = STATE.dates[currentDate] || {};
+  const camps = STATE.meta.campaigns;
+  const sources = STATE.meta.jobSources;
+
+  const t4Rows = camps.map(c => {
+    const tgt = n(d.target?.[c.id]);
+    const dep = n(d.distribution?.[c.id]);
+    const sf = tgt - dep;
+    const rn = recruitNeeded(tgt, dep);
+    return `<tr>
+      <td style="font-family:var(--fh);font-size:13px">${c.label}</td>
+      <td class="r ro">${tgt}</td>
+      <td class="r ro">${dep}</td>
+      <td class="r ${valClass(-sf)}">${sf > 0 ? '–'+sf : sf < 0 ? '+'+Math.abs(sf) : '0'}</td>
+      <td class="r" style="font-family:var(--fm);color:${rn>0?'var(--amber)':'var(--text3)'};font-weight:${rn>0?700:400}">${rn||'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const t4Total = totalRecruitNeeded(d);
+  const tgtTotal = totalTarget(d);
+  const distTotal = STATE.meta.campaigns.reduce((s,c)=>s+n(d.distribution?.[c.id]),0);
+  const netTotal = totalActive(d) - tgtTotal;
+
+  const appRows = sources.map(src => {
+    const elId = 't5-' + src.replace(/[^a-z0-9]/gi,'_');
+    return `<tr>
+      <td>${src} <button class="btn btn-del btn-sm" style="margin-left:6px" onclick="removeSource('${src.replace(/'/g,"\\'")}')">✕</button></td>
+      <td class="r"><input class="ni" type="number" id="${elId}" value="${n(d.applications?.[src])}" oninput="recalc()"></td>
+    </tr>`;
+  }).join('');
+
+  const pipeCards = sources.map(src => {
+    const elId = 't5-' + src.replace(/[^a-z0-9]/gi,'_');
+    const cnt = n(d.applications?.[src]);
+    return `<div class="pipe"><div class="pipe-src">${src}</div><div class="pipe-n" id="pipe-${elId}">${cnt}</div><div class="pipe-lbl">applications</div></div>`;
+  }).join('');
+
+  document.getElementById('recruitment-content').innerHTML = `
+    <div class="card">
+      <div class="card-head">TABLE 4 — Recruitment Needed <span class="tag">AUTO-CALCULATED</span></div>
+      <div class="alert info" style="margin-bottom:14px">ℹ️ Shortfall × 1.20 buffer applied for training attrition. Figures update when Operations data changes.</div>
+      <table class="dt">
+        <thead><tr>
+          <th>Campaign</th><th class="r">Target</th><th class="r">Deployed</th><th class="r">Shortfall</th>
+          <th class="r">Needed (+20%)</th>
+        </tr></thead>
+        <tbody id="t4-body">
+          ${t4Rows}
+          <tr class="tr">
+            <td>TOTAL</td>
+            <td class="r ro">${tgtTotal}</td>
+            <td class="r ro">${distTotal}</td>
+            <td class="r ${valClass(netTotal)}">${fmt(netTotal)}</td>
+            <td class="r" style="font-family:var(--fm);color:${t4Total>0?'var(--amber)':'var(--text3)'};font-weight:700">${t4Total||'—'}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-head">TABLE 5 — Applications by Source <span class="tag">RECRUITMENT / RUBY</span></div>
+      <table class="dt">
+        <thead><tr><th>Source</th><th class="r">Applications</th></tr></thead>
+        <tbody>
+          ${appRows}
+          <tr class="tr"><td>TOTAL APPLICATIONS</td><td class="r" id="t5-total">0</td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:12px">
+        <button class="btn btn-ol btn-sm" onclick="openModal('source-modal');document.getElementById('source-name-input').value=''">+ Add Job Board / Source</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">Hiring Pipeline Status</div>
+      <div class="pipeline" id="pipeline-grid">${pipeCards}</div>
+      <div class="net-big bal" id="hiring-indicator">
+        <div class="net-lbl">Hiring (Shortage) / Overage</div>
+        <div class="net-val" id="hiring-val">—</div>
+        <div class="net-desc" id="hiring-desc">Total applications vs recruitment needed</div>
+      </div>
+    </div>`;
+
+  recalcDisplayOnly();
+}
+
+// ═══════════════════════════════════════════════
+// RENDER TRAINEES TAB
+// ═══════════════════════════════════════════════
+function renderTraineesTab() {
+  const d = STATE.dates[currentDate] || {};
+  const batches = STATE.meta.batches;
+  const activeBatches = activeBatchesOnDate(currentDate);
+  const maxCount = Math.max(1, ...batches.map(b => n(d.batchCounts?.[b.id])));
+
+  // Batch management cards
+  const batchCards = batches.map((b, bi) => {
+    const day = trainingDay(b.startDate, currentDate);
+    const dl = dayLabel(day);
+    const cnt = n(d.batchCounts?.[b.id]);
+    const color = BATCH_COLORS[bi % BATCH_COLORS.length];
+    return `<div class="batch-card">
+      <div class="batch-card-top">
+        <div>
+          <div class="batch-name" style="color:${color}">${b.name}</div>
+          <div class="batch-date">Started: ${b.startDate}</div>
+          ${dl ? `<div class="batch-day-badge ${dl.cls}">${dl.text}</div>` : `<div class="batch-day-badge day-future">Starts ${b.startDate}</div>`}
+        </div>
+        <button class="btn btn-del btn-sm" onclick="removeBatch('${b.id}')">✕</button>
+      </div>
+      ${dl ? `<div style="margin-top:8px">
+        <div style="font-family:var(--fh);font-size:10px;letter-spacing:1px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Trainees on ${currentDate}</div>
+        <input class="ni wide" type="number" id="t6-${b.id}" value="${cnt}" oninput="recalc()" placeholder="0">
+        <div class="batch-count" id="cnt-${b.id}">${cnt||'—'}</div>
+      </div>` : `<div style="margin-top:8px;font-size:12px;color:var(--text3)">Not yet started on this date.</div>`}
+    </div>`;
+  }).join('');
+
+  // Bar visualizations for active batches
+  const barRows = batches.filter(b => trainingDay(b.startDate, currentDate) >= 1).map((b, bi) => {
+    const cnt = n(d.batchCounts?.[b.id]);
+    const pct = maxCount > 0 ? (cnt / maxCount * 100) : 0;
+    const color = BATCH_COLORS[STATE.meta.batches.indexOf(b) % BATCH_COLORS.length];
+    const day = trainingDay(b.startDate, currentDate);
+    const dl = dayLabel(day);
+    return `<div class="tr-bar-row">
+      <div class="tr-blbl">${b.name}</div>
+      <div style="display:inline-block;margin:0 8px"><span class="batch-day-badge ${dl?.cls||''}" style="font-size:10px;padding:2px 6px">${dl?.text||''}</span></div>
+      <div class="tr-bar-w"><div class="tr-bar" style="width:${pct}%;background:${color}"></div></div>
+      <div class="tr-cnt">${cnt||'—'}</div>
+    </div>`;
+  }).join('') || `<div style="color:var(--text3);font-size:13px;padding:12px 0">No active batches on this date.</div>`;
+
+  // Monthly chart data will be in chart section
+  const totalTrain = totalBatchCount(currentDate);
+
+  document.getElementById('trainees-content').innerHTML = `
+    <div class="card">
+      <div class="card-head">Training Batches — Management
+        <button class="btn btn-pr btn-sm" onclick="openModal('batch-modal');document.getElementById('batch-name-input').value='';document.getElementById('batch-start-input').value='${currentDate}'">+ Add Batch</button>
+      </div>
+      <div class="alert info" style="margin-bottom:16px">ℹ️ Training extends to Day 12+ when trainees need more time to pass. Multiple overlapping batches are shown simultaneously. Batches highlighted in <span style="color:var(--amber)">amber</span> (Day 8–12) and <span style="color:var(--red)">red</span> (Day 13+) are in extended training.</div>
+      <div class="batch-grid">${batchCards || '<div style="color:var(--text3);font-size:13px">No batches defined. Add a batch to get started.</div>'}</div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">Training Pipeline — Visual</div>
+      ${barRows}
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <div style="font-family:var(--fh);font-size:13px;color:var(--text2)">TOTAL IN TRAINING TODAY</div>
+        <div style="font-family:var(--fm);font-size:28px;font-weight:700;color:var(--teal)" id="trainee-total">${totalTrain||'—'}</div>
+      </div>
+    </div>
+
+    <div class="full-chart" style="margin-bottom:0">
+      <div class="chart-title">All Batches — Trainee Counts Over Time</div>
+      <div class="full-chart-wrap"><canvas id="chart-batches-local"></canvas></div>
+    </div>`;
+
+  // Local batch chart
+  setTimeout(() => renderBatchChart(), 50);
+}
+
+function renderBatchChart() {
+  const canvas = document.getElementById('chart-batches-local');
+  if (!canvas) return;
+  if (canvas._chartInst) { canvas._chartInst.destroy(); }
+
+  const labels = DATES.map(dt => dt.label);
+  const datasets = STATE.meta.batches.map((b, bi) => ({
+    label: b.name,
+    data: DATES.map(dt => n(STATE.dates[dt.key]?.batchCounts?.[b.id])),
+    backgroundColor: BATCH_COLORS[bi % BATCH_COLORS.length] + '55',
+    borderColor: BATCH_COLORS[bi % BATCH_COLORS.length],
+    borderWidth: 2, fill: true, tension: .3, pointRadius: 2,
+  }));
+
+  canvas._chartInst = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#8896b3', font: { family: 'Space Mono', size: 10 } } },
+        tooltip: { backgroundColor: '#1a2138', borderColor: '#252d42', borderWidth: 1 }
+      },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#8896b3', font: { family: 'Space Mono', size: 8 }, maxTicksLimit: 12 } },
+        y: { grid: { color: 'rgba(255,255,255,.06)' }, ticks: { color: '#8896b3', font: { family: 'Space Mono', size: 9 } }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════
+// RECALC — computed fields only (no re-render)
+// ═══════════════════════════════════════════════
+function recalcDisplayOnly() {
+  saveForm();
+  const d = STATE.dates[currentDate] || {};
+  const tgt = totalTarget(d), act = totalActive(d), dist = totalDist(d);
+  const net = act - tgt;
+
+  const el = id => document.getElementById(id);
+
+  // Ops tab
+  if (el('t1-total')) el('t1-total').textContent = tgt;
+  if (el('t2-total')) el('t2-total').textContent = act;
+  if (el('t3-total')) el('t3-total').textContent = dist;
+  if (el('dist-warn')) el('dist-warn').style.display = (act > 0 && dist !== act) ? 'flex' : 'none';
+
+  const netInd = el('net-indicator');
+  if (netInd) {
+    netInd.className = 'net-big ' + clsNet(net);
+    el('net-val').textContent = (tgt === 0 && act === 0) ? '—' : fmt(net);
+    el('net-desc').textContent = net < 0 ? `Short by ${Math.abs(net)} agents` : net > 0 ? `Surplus of ${net} agents` : tgt === 0 ? 'No target set for this date' : 'Headcount balanced ✓';
+  }
+
+  // Recruitment tab
+  const apps = totalApps(d), rn = totalRecruitNeeded(d);
+  if (el('t5-total')) el('t5-total').textContent = apps;
+  const hiringNet = apps - rn;
+  const hInd = el('hiring-indicator');
+  if (hInd) {
+    hInd.className = 'net-big ' + (rn === 0 ? 'bal' : clsNet(hiringNet));
+    el('hiring-val').textContent = rn === 0 ? '—' : fmt(hiringNet);
+    el('hiring-desc').textContent = rn === 0 ? 'No recruitment needed for this date' : hiringNet < 0 ? `Short ${Math.abs(hiringNet)} applications (need ${rn})` : `${hiringNet} applications ahead of target`;
+  }
+
+  // Update pipeline card numbers
+  STATE.meta.jobSources.forEach(src => {
+    const elId = 't5-' + src.replace(/[^a-z0-9]/gi, '_');
+    const pipeEl = el('pipe-' + elId);
+    if (pipeEl) pipeEl.textContent = n(d.applications?.[src]);
+  });
+
+  // Trainee total
+  const tot = el('trainee-total');
+  const ttot = totalBatchCount(currentDate);
+  if (tot) tot.textContent = ttot || '—';
+
+  // Update batch count displays
+  STATE.meta.batches.forEach(b => {
+    const cntEl = el(`cnt-${b.id}`);
+    if (cntEl) {
+      const cnt = n(d.batchCounts?.[b.id]);
+      cntEl.textContent = cnt || '—';
+    }
+  });
+
+  // Badges
+  const opsBadge = el('ops-badge');
+  if (opsBadge) opsBadge.style.display = (net < 0 && tgt > 0) ? 'inline' : 'none';
+  const trainBadge = el('train-badge');
+  if (trainBadge) {
+    trainBadge.style.display = ttot > 0 ? 'inline' : 'none';
+    trainBadge.textContent = ttot;
+  }
+
+  renderDateStrip();
+  updateCharts();
+}
+
+function recalc() {
+  recalcDisplayOnly();
+}
+
+// ═══════════════════════════════════════════════
+// FULL RENDER (called on tab switch / date change)
+// ═══════════════════════════════════════════════
+function renderCurrentTab() {
+  if (currentTab === 'ops') renderOpsTab();
+  else if (currentTab === 'recruitment') renderRecruitmentTab();
+  else if (currentTab === 'trainees') renderTraineesTab();
+  else updateDashboard();
+}
+
+// ═══════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════
+function updateDashboard() {
+  const d = STATE.dates[currentDate] || {};
+  const dt = DATES.find(x => x.key === currentDate);
+  const tgt = totalTarget(d), act = totalActive(d), net = act - tgt;
+  const ct = n(d.active?.crossTrained), apps = totalApps(d), rn = totalRecruitNeeded(d);
+  const ttrain = totalBatchCount(currentDate);
+
+  document.getElementById('hdr-date').textContent = dt ? `${dt.label} (${dt.day})`.toUpperCase() : 'APR–MAY 2026';
+
+  document.getElementById('kpi-row').innerHTML = `
+    <div class="kpi c-teal"><div class="kpi-l">Target Headcount</div><div class="kpi-v teal">${tgt || '—'}</div><div class="kpi-s">All campaigns</div></div>
+    <div class="kpi ${net<0?'c-red':net>0?'c-green':'c-amber'}"><div class="kpi-l">Net Surplus / Shortfall</div><div class="kpi-v ${net<0?'neg':net>0?'pos':'neutral'}">${tgt===0&&act===0?'—':fmt(net)}</div><div class="kpi-s">${net<0?'Shortfall':net>0?'Surplus':'Balanced'}</div></div>
+    <div class="kpi c-teal"><div class="kpi-l">Active Agents</div><div class="kpi-v neutral">${act || '—'}</div><div class="kpi-s">${ct} cross-trained</div></div>
+    <div class="kpi ${apps>=rn&&rn>0?'c-green':apps<rn&&rn>0?'c-red':'c-amber'}"><div class="kpi-l">Applications</div><div class="kpi-v ${apps>=rn&&rn>0?'pos':apps<rn&&rn>0?'neg':'neutral'}">${apps || '—'}</div><div class="kpi-s">${rn > 0 ? rn + ' needed' : 'No hiring needed'}</div></div>
+    <div class="kpi c-violet"><div class="kpi-l">In Training</div><div class="kpi-v amber">${ttrain || '—'}</div><div class="kpi-s">${activeBatchesOnDate(currentDate).length} batch(es) active</div></div>
+  `;
+
+  const alertEl = document.getElementById('dash-alert');
+  if (net < 0 && tgt > 0) {
+    alertEl.innerHTML = `<div class="alert danger">🚨 Shortfall of <strong>${Math.abs(net)}</strong> agents on ${dt?.label}. Recruitment needs <strong>${rn}</strong> hires (incl. 20% buffer).</div>`;
+  } else if (net > 0 && act > 0) {
+    alertEl.innerHTML = `<div class="alert success">✅ ${dt?.label} is in surplus by <strong>${net}</strong> agents. ${ct} cross-trained and flexibly deployable.</div>`;
+  } else if (tgt === 0) {
+    alertEl.innerHTML = `<div class="alert info">📅 ${dt?.label} (${dt?.day}) — no target set. This may be a rest day or future date.</div>`;
+  } else {
+    alertEl.innerHTML = '';
+  }
+
+  updateCharts();
+}
+
+// ═══════════════════════════════════════════════
+// CHARTS
+// ═══════════════════════════════════════════════
+const CHART_OPTS = {
+  responsive: true, maintainAspectRatio: false,
+  interaction: { mode: 'index', intersect: false },
+  plugins: {
+    legend: { labels: { color: '#8896b3', font: { family: 'Space Mono', size: 10 } } },
+    tooltip: { backgroundColor: '#1a2138', borderColor: '#252d42', borderWidth: 1 }
+  },
+  scales: {
+    x: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#8896b3', font: { family: 'Space Mono', size: 8 }, maxTicksLimit: 16 } },
+    y: { grid: { color: 'rgba(255,255,255,.06)' }, ticks: { color: '#8896b3', font: { family: 'Space Mono', size: 9 } } }
+  }
+};
+
+function initCharts() {
+  const labels = DATES.map(dt => dt.label);
+
+  charts.monthly = new Chart(document.getElementById('chart-monthly').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Target', data: [], borderColor: '#00d4a8', backgroundColor: 'rgba(0,212,168,.08)', tension: .3, fill: true, pointRadius: 2, borderWidth: 2 },
+        { label: 'Active', data: [], borderColor: '#ffa940', backgroundColor: 'rgba(255,169,64,.06)', tension: .3, fill: true, pointRadius: 2, borderWidth: 2 },
+      ]
+    },
+    options: { ...CHART_OPTS }
+  });
+
+  charts.net = new Chart(document.getElementById('chart-net').getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Net', data: [], backgroundColor: [], borderRadius: 3, borderSkipped: false }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1a2138' } },
+      scales: CHART_OPTS.scales
+    }
+  });
+
+  charts.dist = new Chart(document.getElementById('chart-dist').getContext('2d'), {
+    type: 'doughnut',
+    data: { labels: [], datasets: [{ data: [], backgroundColor: ['#00d4a8','#ffa940','#7c6af7','#ff3d5a','#23d18b','#4aaeff','#ff6b9d','#c8e63b'], borderColor: 'transparent', borderWidth: 3 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#8896b3', font: { family: 'Space Mono', size: 10 }, padding: 10 } } } }
+  });
+
+  charts.apps = new Chart(document.getElementById('chart-apps').getContext('2d'), {
+    type: 'doughnut',
+    data: { labels: [], datasets: [{ data: [], backgroundColor: ['#1877f2','#00abe7','#e20000','#23d18b','#9d7bea','#ffa940'], borderColor: 'transparent', borderWidth: 3 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#8896b3', font: { family: 'Space Mono', size: 10 }, padding: 10 } } } }
+  });
+
+  charts.trainees = new Chart(document.getElementById('chart-trainees').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: STATE.meta.batches.map((b, bi) => ({
+        label: b.name,
+        data: [],
+        backgroundColor: BATCH_COLORS[bi % BATCH_COLORS.length] + '88',
+        borderColor: BATCH_COLORS[bi % BATCH_COLORS.length],
+        borderWidth: 1, borderRadius: 2,
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#8896b3', font: { family: 'Space Mono', size: 10 } } },
+        tooltip: { backgroundColor: '#1a2138' }
+      },
+      scales: { ...CHART_OPTS.scales, x: { ...CHART_OPTS.scales.x, stacked: true }, y: { ...CHART_OPTS.scales.y, stacked: true, beginAtZero: true } }
+    }
+  });
+
+  updateCharts();
+}
+
+function updateCharts() {
+  if (!charts.monthly) return;
+  const d = STATE.dates[currentDate] || {};
+
+  charts.monthly.data.datasets[0].data = DATES.map(dt => totalTarget(STATE.dates[dt.key] || {}));
+  charts.monthly.data.datasets[1].data = DATES.map(dt => totalActive(STATE.dates[dt.key] || {}));
+  charts.monthly.update('none');
+
+  const nets = DATES.map(dt => { const d2 = STATE.dates[dt.key]||{}; return totalActive(d2) - totalTarget(d2); });
+  charts.net.data.datasets[0].data = nets;
+  charts.net.data.datasets[0].backgroundColor = nets.map(v => v < 0 ? 'rgba(255,61,90,.65)' : v > 0 ? 'rgba(35,209,139,.65)' : 'rgba(100,120,150,.4)');
+  charts.net.update('none');
+
+  // Dist donut — campaigns
+  const distLabels = [...STATE.meta.campaigns.map(c => c.label), 'Pool'];
+  const distData = [...STATE.meta.campaigns.map(c => n(d.distribution?.[c.id])), n(d.distribution?._pool)];
+  charts.dist.data.labels = distLabels;
+  charts.dist.data.datasets[0].data = distData;
+  charts.dist.update('none');
+
+  // Apps donut — job sources
+  charts.apps.data.labels = STATE.meta.jobSources;
+  charts.apps.data.datasets[0].data = STATE.meta.jobSources.map(src => n(d.applications?.[src]));
+  charts.apps.update('none');
+
+  // Trainees — rebuild datasets if batches changed
+  const batchCount = STATE.meta.batches.length;
+  if (charts.trainees.data.datasets.length !== batchCount) {
+    charts.trainees.data.datasets = STATE.meta.batches.map((b, bi) => ({
+      label: b.name,
+      data: DATES.map(dt => n(STATE.dates[dt.key]?.batchCounts?.[b.id])),
+      backgroundColor: BATCH_COLORS[bi % BATCH_COLORS.length] + '88',
+      borderColor: BATCH_COLORS[bi % BATCH_COLORS.length],
+      borderWidth: 1, borderRadius: 2,
+    }));
+  } else {
+    charts.trainees.data.datasets.forEach((ds, bi) => {
+      const b = STATE.meta.batches[bi];
+      ds.data = DATES.map(dt => n(STATE.dates[dt.key]?.batchCounts?.[b.id]));
+    });
+  }
+  charts.trainees.update('none');
+}
+
+// ═══════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════
+function selectDate(key) {
+  saveForm();
+  currentDate = key;
+  renderCurrentTab();
+  renderDateStrip();
+  updateDashboard();
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach((el, i) => el.classList.toggle('active', ['dashboard','ops','recruitment','trainees'][i] === tab));
+  document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
+  document.getElementById('pane-' + tab).classList.add('active');
+  renderCurrentTab();
+}
+
+// ═══════════════════════════════════════════════
+// DYNAMIC: ADD / REMOVE CAMPAIGNS
+// ═══════════════════════════════════════════════
+function addCampaign() {
+  const name = document.getElementById('camp-name-input').value.trim();
+  if (!name) return;
+  const id = slug(name);
+  STATE.meta.campaigns.push({ id, label: name });
+  closeModal('camp-modal');
+  renderOpsTab();
+  showToast(`Campaign "${name}" added`);
+}
+function removeCampaign(id) {
+  const c = STATE.meta.campaigns.find(x => x.id === id);
+  if (!c) return;
+  if (!confirm(`Remove campaign "${c.label}"? Entered data for this campaign will be kept in storage but not displayed.`)) return;
+  STATE.meta.campaigns = STATE.meta.campaigns.filter(x => x.id !== id);
+  renderOpsTab();
+  showToast(`Campaign removed`);
+}
+
+// ═══════════════════════════════════════════════
+// DYNAMIC: ADD / REMOVE SOURCES
+// ═══════════════════════════════════════════════
+function addSource() {
+  const name = document.getElementById('source-name-input').value.trim();
+  if (!name) return;
+  if (STATE.meta.jobSources.includes(name)) { alert('Source already exists.'); return; }
+  STATE.meta.jobSources.push(name);
+  closeModal('source-modal');
+  renderRecruitmentTab();
+  showToast(`Source "${name}" added`);
+}
+function removeSource(src) {
+  if (!confirm(`Remove source "${src}"?`)) return;
+  STATE.meta.jobSources = STATE.meta.jobSources.filter(s => s !== src);
+  renderRecruitmentTab();
+  showToast(`Source removed`);
+}
+
+// ═══════════════════════════════════════════════
+// DYNAMIC: ADD / REMOVE BATCHES
+// ═══════════════════════════════════════════════
+function addBatch() {
+  const name = document.getElementById('batch-name-input').value.trim();
+  const startDate = document.getElementById('batch-start-input').value;
+  if (!name) { alert('Please enter a batch name.'); return; }
+  if (!startDate) { alert('Please select a start date.'); return; }
+  const id = 'batch-' + Date.now().toString(36);
+  STATE.meta.batches.push({ id, name, startDate });
+  closeModal('batch-modal');
+  renderTraineesTab();
+  updateCharts();
+  showToast(`"${name}" added (starts ${startDate})`);
+}
+function removeBatch(id) {
+  const b = STATE.meta.batches.find(x => x.id === id);
+  if (!b) return;
+  if (!confirm(`Remove batch "${b.name}"? Training data for this batch will be retained in storage.`)) return;
+  STATE.meta.batches = STATE.meta.batches.filter(x => x.id !== id);
+  renderTraineesTab();
+  updateCharts();
+  showToast(`Batch removed`);
+}
+
+// ═══════════════════════════════════════════════
+// SAVE / EXPORT / IMPORT
+// ═══════════════════════════════════════════════
+function saveData() {
+  saveForm();
+  try {
+    localStorage.setItem('hc-state-v2', JSON.stringify(STATE));
+    showToast('Data saved ✓');
+  } catch(e) { alert('Save failed: ' + e.message); }
+}
+function exportJSON() {
+  saveForm();
+  const blob = new Blob([JSON.stringify(STATE, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'hc-command-apr-may2026.json';
+  a.click();
+}
+function showImport() { openModal('import-modal'); document.getElementById('import-text').value = ''; }
+function doImport() {
+  try {
+    const parsed = JSON.parse(document.getElementById('import-text').value);
+    if (!parsed._version || !parsed.meta || !parsed.dates) throw new Error('Invalid format');
+    Object.assign(STATE, parsed);
+    localStorage.setItem('hc-state-v2', JSON.stringify(STATE));
+    closeModal('import-modal');
+    renderCurrentTab();
+    renderDateStrip();
+    updateDashboard();
+    showToast('Data imported ✓');
+  } catch(e) { alert('Import failed: ' + e.message); }
+}
+
+// ═══════════════════════════════════════════════
+// MODAL HELPERS
+// ═══════════════════════════════════════════════
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); }));
+
+// ═══════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.display = 'none'; }, 2200);
+}
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  renderDateStrip();
+  updateDashboard();
+  setTimeout(initCharts, 80);
+
+  // Keyboard date navigation
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    const idx = DATES.findIndex(d => d.key === currentDate);
+    if (e.key === 'ArrowRight' && idx < DATES.length - 1) { saveForm(); selectDate(DATES[idx+1].key); }
+    if (e.key === 'ArrowLeft' && idx > 0) { saveForm(); selectDate(DATES[idx-1].key); }
+  });
+});
+</script>
+</body>
+</html>
