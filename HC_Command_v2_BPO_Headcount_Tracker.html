@@ -65,6 +65,9 @@ nav.tabs{background:var(--surface);border-bottom:1px solid var(--border);padding
 .alert.success{background:var(--green-dim);border:1px solid var(--green);color:var(--green)}
 .alert.info{background:var(--teal-dim);border:1px solid var(--teal);color:var(--teal)}
 .alert.warn{background:var(--amber-dim);border:1px solid var(--amber);color:var(--amber)}
+.source-banner{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;margin:18px 24px 0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.source-banner strong{font-family:var(--fh);font-size:12px;letter-spacing:1px;color:var(--teal);text-transform:uppercase}
+.source-banner span{font-size:12px;color:var(--text2)}
 .charts-row{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px}
 .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:20px}
 .chart-title{font-family:var(--fh);font-size:11px;font-weight:600;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:14px}
@@ -177,6 +180,11 @@ nav.tabs{background:var(--surface);border-bottom:1px solid var(--border);padding
   <div class="date-strip" id="date-strip"></div>
 </div>
 
+<div class="source-banner">
+  <strong>Google Sheet Source</strong>
+  <span id="source-banner-text">Loading latest spreadsheet data...</span>
+</div>
+
 <div class="main">
 
   <!-- DASHBOARD -->
@@ -210,9 +218,8 @@ nav.tabs{background:var(--surface);border-bottom:1px solid var(--border);padding
   <!-- OPERATIONS -->
   <div class="tab-pane" id="pane-ops">
     <div class="action-bar">
-      <button class="btn btn-pr" onclick="saveData()">💾 Save Data</button>
-      <button class="btn btn-ol" onclick="exportJSON()">⬇ Export JSON</button>
-      <button class="btn btn-ol" onclick="showImport()">⬆ Import JSON</button>
+      <button class="btn btn-pr" onclick="reloadFromSheet(true)">Reload From Sheet</button>
+      <div class="today-label" id="sheet-status">Source: Google Sheet</div>
     </div>
     <div id="ops-content"></div>
   </div>
@@ -338,6 +345,8 @@ const DEFAULT_BATCHES = [
   { id: 'batch-3', name: 'Batch 3', startDate: '2026-03-27' },
   { id: 'batch-4', name: 'Batch 4', startDate: '2026-03-30' },
 ];
+const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1Yq-8Whkfhc9CQ2tcCy-AqUuuLjLQCizHY3te7QB5edI/gviz/tq?tqx=out:csv&gid=1197346270';
+const EDITABLE = false;
 
 // TKV targets from original tracker (Apr 3–30)
 const TKV_APR = [63,63,63,50,50,50,75,50,0,0,106,106,106,106,106,106,0,106,106,106,106,106,106,0,106,106,106,106];
@@ -349,20 +358,8 @@ function mkDay() {
   return { target:{}, active:{crossTrained:0,notCrossed:0,returnees:0,passers:0,separation:0}, distribution:{}, applications:{}, batchCounts:{} };
 }
 
-let STATE;
-try {
-  const raw = localStorage.getItem('hc-state-v2');
-  if (raw) {
-    const parsed = JSON.parse(raw);
-    // Validate it's v2 format
-    if (parsed._version === 2 && parsed.meta && parsed.dates) {
-      STATE = parsed;
-    }
-  }
-} catch(e) {}
-
-if (!STATE) {
-  STATE = {
+function buildBaseState() {
+  const state = {
     _version: 2,
     meta: {
       campaigns: JSON.parse(JSON.stringify(DEFAULT_CAMPAIGNS)),
@@ -371,7 +368,16 @@ if (!STATE) {
     },
     dates: {}
   };
-  // Pre-populate from CSV data
+  DATES.forEach((dt, i) => {
+    const d = mkDay();
+    if (i < TKV_APR.length) d.target.tkv = TKV_APR[i] || 0;
+    state.dates[dt.key] = d;
+  });
+  return state;
+}
+
+function buildFallbackState() {
+  const state = buildBaseState();
   const PRE = {
     '2026-04-03': {
       target: { tkv:63, lbbNew:0, lbbNexus:80, saPdf:70 },
@@ -402,25 +408,18 @@ if (!STATE) {
       batchCounts: { 'batch-3':2, 'batch-4':10 }
     }
   };
-  DATES.forEach((dt, i) => {
-    if (PRE[dt.key]) {
-      STATE.dates[dt.key] = PRE[dt.key];
-    } else {
-      const d = mkDay();
-      if (i < TKV_APR.length) d.target.tkv = TKV_APR[i] || 0;
-      STATE.dates[dt.key] = d;
-    }
+  Object.entries(PRE).forEach(([key, value]) => {
+    state.dates[key] = value;
   });
+  return state;
 }
 
-// Ensure all dates exist
-DATES.forEach((dt, i) => {
-  if (!STATE.dates[dt.key]) {
-    const d = mkDay();
-    if (i < TKV_APR.length) d.target.tkv = TKV_APR[i] || 0;
-    STATE.dates[dt.key] = d;
-  }
-});
+let STATE = buildFallbackState();
+let sheetSourceMeta = {
+  status: 'loading',
+  loadedAt: null,
+  error: ''
+};
 
 let currentDate = DATES[0].key;
 let currentTab = 'dashboard';
@@ -434,6 +433,7 @@ const fmt = v => v > 0 ? '+' + v : String(v);
 const clsNet = v => v > 0 ? 'sp' : v < 0 ? 'sf' : 'bal';
 const valClass = v => v > 0 ? 'sp-val' : v < 0 ? 'sf-val' : 'nt-val';
 const slug = s => s.toLowerCase().replace(/[^a-z0-9]/g,'_').replace(/_+/g,'_').slice(0,40) + '_' + Date.now().toString(36);
+const stableId = s => s.toLowerCase().replace(/[—–-]/g,' ').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
 
 function totalTarget(d) {
   return STATE.meta.campaigns.reduce((s,c) => s + n(d.target?.[c.id]), 0);
@@ -477,6 +477,322 @@ function activeBatchesOnDate(dateKey) {
     const day = trainingDay(b.startDate, dateKey);
     return day >= 1;
   });
+}
+
+function canonicalLabel(label) {
+  return String(label || '')
+    .toLowerCase()
+    .replace(/[—–-]/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let value = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+
+    if (inQuotes) {
+      if (ch === '"' && next === '"') {
+        value += '"';
+        i++;
+      } else if (ch === '"') {
+        inQuotes = false;
+      } else {
+        value += ch;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ',') {
+      row.push(value);
+      value = '';
+    } else if (ch === '\n') {
+      row.push(value);
+      rows.push(row);
+      row = [];
+      value = '';
+    } else if (ch !== '\r') {
+      value += ch;
+    }
+  }
+
+  if (value !== '' || row.length) {
+    row.push(value);
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function parseSheetDate(value) {
+  const match = String(value || '').trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return null;
+  const [, mm, dd, yyyy] = match;
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function hasDataInRow(row, dateCols) {
+  return dateCols.some(col => String(row[col.index] || '').trim() !== '');
+}
+
+function readNumber(row, colIndex) {
+  const raw = String(row[colIndex] || '').trim().replace(/[(),]/g, '');
+  if (!raw) return 0;
+  return Number(raw) || 0;
+}
+
+function sheetCampaignId(label) {
+  const known = {
+    [canonicalLabel('TKV')]: 'tkv',
+    [canonicalLabel('LBB — New Ego')]: 'lbbNew',
+    [canonicalLabel('LBB — Nexus Ego')]: 'lbbNexus',
+    [canonicalLabel('SA — PDF')]: 'saPdf'
+  };
+  return known[canonicalLabel(label)] || stableId(label);
+}
+
+function extractGroupedRows(rows, dateCols) {
+  const result = [];
+  let currentGroup = '';
+
+  rows.forEach(row => {
+    const left = String(row[0] || '').trim();
+    const right = String(row[1] || '').trim();
+    const hasData = hasDataInRow(row, dateCols);
+
+    if (!hasData && left && !right) {
+      currentGroup = left;
+      return;
+    }
+    if (!hasData) return;
+
+    let label = '';
+    if (left && right) label = `${left} — ${right}`;
+    else if (!left && right) label = currentGroup ? `${currentGroup} — ${right}` : right;
+    else if (left) label = left;
+
+    if (label) result.push({ label, row });
+  });
+
+  return result;
+}
+
+function ensureAllDates(state) {
+  DATES.forEach((dt, i) => {
+    if (!state.dates[dt.key]) {
+      const d = mkDay();
+      if (i < TKV_APR.length) d.target.tkv = TKV_APR[i] || 0;
+      state.dates[dt.key] = d;
+    }
+  });
+}
+
+function parseSheetState(csvText) {
+  const rows = parseCsv(csvText);
+  const dateCols = rows[0]
+    .map((value, index) => ({ index, key: parseSheetDate(value) }))
+    .filter(col => col.key);
+
+  const state = buildBaseState();
+  state.meta.campaigns = [];
+  state.meta.jobSources = [];
+  state.meta.batches = [];
+
+  const rowIndex = prefix => rows.findIndex(row => String(row[0] || '').trim().startsWith(prefix));
+  const targetStart = rowIndex('TARGET HEADCOUNT');
+  const targetEnd = rowIndex('TOTAL TARGET HEADCOUNT');
+  const activeStart = rowIndex('CURRENT ACTIVE AGENTS');
+  const distStart = rowIndex('DISTRIBUTION OF ACTIVE AGENTS');
+  const recruitStart = rowIndex('TABLE 4');
+  const appsStart = rowIndex('NO. OF APPLICATIONS');
+  const traineesStart = rowIndex('NO. OF TRAINEES');
+  const traineesEnd = rows.length;
+
+  const campaignRows = extractGroupedRows(rows.slice(targetStart + 1, targetEnd), dateCols);
+  const campaignMap = new Map();
+  campaignRows.forEach(({ label, row }) => {
+    const id = sheetCampaignId(label);
+    state.meta.campaigns.push({ id, label });
+    campaignMap.set(canonicalLabel(label), id);
+    dateCols.forEach(col => {
+      if (state.dates[col.key]) state.dates[col.key].target[id] = readNumber(row, col.index);
+    });
+  });
+
+  const activeEnd = rows.findIndex((row, idx) => idx > activeStart && idx < distStart && String(row[0] || '').trim() === 'TOTAL');
+  const activeRows = rows.slice(activeStart + 1, activeEnd);
+  const activeKeyMap = {
+    [canonicalLabel('Cross-Trained')]: 'crossTrained',
+    [canonicalLabel('Not Cross-Trained')]: 'notCrossed',
+    [canonicalLabel('Returnees')]: 'returnees',
+    [canonicalLabel('Passers')]: 'passers',
+    [canonicalLabel('Separation')]: 'separation'
+  };
+  activeRows.forEach(row => {
+    const label = canonicalLabel(row[1]);
+    const key = activeKeyMap[label];
+    if (!key) return;
+    dateCols.forEach(col => {
+      if (state.dates[col.key]) state.dates[col.key].active[key] = readNumber(row, col.index);
+    });
+  });
+
+  const appsTotalIndex = rows.findIndex((row, idx) => idx > appsStart && String(row[0] || '').trim() === 'TOTAL');
+  const distRows = extractGroupedRows(rows.slice(distStart + 1, recruitStart), dateCols);
+  distRows.forEach(({ label, row }) => {
+    const id = campaignMap.get(canonicalLabel(label));
+    if (!id) return;
+    dateCols.forEach(col => {
+      if (state.dates[col.key]) state.dates[col.key].distribution[id] = readNumber(row, col.index);
+    });
+  });
+
+  const poolLabelIndex = rows.findIndex((row, idx) => idx > distStart && idx < recruitStart && String(row[0] || '').trim() === 'Pool/Reserved');
+  let poolValuesRow = null;
+  if (poolLabelIndex >= 0) {
+    if (hasDataInRow(rows[poolLabelIndex], dateCols)) {
+      poolValuesRow = rows[poolLabelIndex];
+    } else {
+      for (let i = poolLabelIndex + 1; i < recruitStart; i++) {
+        const left = String(rows[i][0] || '').trim();
+        if (hasDataInRow(rows[i], dateCols) && left !== 'TOTAL' && !left.startsWith('NET')) {
+          poolValuesRow = rows[i];
+          break;
+        }
+      }
+    }
+  }
+  if (poolValuesRow) {
+    dateCols.forEach(col => {
+      if (state.dates[col.key]) state.dates[col.key].distribution._pool = readNumber(poolValuesRow, col.index);
+    });
+  }
+
+  rows.slice(appsStart + 1, appsTotalIndex).forEach(row => {
+    const source = String(row[0] || '').trim();
+    if (!source) return;
+    state.meta.jobSources.push(source);
+    dateCols.forEach(col => {
+      if (state.dates[col.key]) state.dates[col.key].applications[source] = readNumber(row, col.index);
+    });
+  });
+
+  let currentBatch = null;
+  let currentBatchStart = null;
+  rows.slice(traineesStart + 1, traineesEnd).forEach(row => {
+    const left = String(row[0] || '').trim();
+    const dayMatch = left.match(/^Day\s+(\d+)/i);
+
+    if (/^BATCH\b/i.test(left)) {
+      currentBatch = { id: stableId(left), name: left, startDate: '' };
+      currentBatchStart = null;
+      state.meta.batches.push(currentBatch);
+      return;
+    }
+
+    if (!currentBatch || !dayMatch) return;
+    const dayNumber = Number(dayMatch[1]);
+    dateCols.forEach(col => {
+      const value = readNumber(row, col.index);
+      if (!value || !state.dates[col.key]) return;
+      state.dates[col.key].batchCounts[currentBatch.id] = value;
+      if (!currentBatchStart) {
+        const startDate = new Date(`${col.key}T00:00:00`);
+        startDate.setDate(startDate.getDate() - (dayNumber - 1));
+        currentBatchStart = startDate.toISOString().slice(0, 10);
+      }
+    });
+    if (currentBatchStart) currentBatch.startDate = currentBatchStart;
+  });
+
+  state.meta.batches = state.meta.batches.map(batch => ({
+    ...batch,
+    startDate: batch.startDate || currentDate
+  }));
+
+  ensureAllDates(state);
+  return state;
+}
+
+function latestDateWithData(state) {
+  const totalTargetForState = day => state.meta.campaigns.reduce((sum, campaign) => sum + n(day.target?.[campaign.id]), 0);
+  const totalAppsForState = day => state.meta.jobSources.reduce((sum, source) => sum + n(day.applications?.[source]), 0);
+  const totalBatchForState = day => state.meta.batches.reduce((sum, batch) => sum + n(day.batchCounts?.[batch.id]), 0);
+  for (let i = DATES.length - 1; i >= 0; i--) {
+    const key = DATES[i].key;
+    const day = state.dates[key] || {};
+    const totalActiveForDay = n(day.active?.crossTrained) + n(day.active?.notCrossed) + n(day.active?.returnees) + n(day.active?.passers) + n(day.active?.separation);
+    if (totalTargetForState(day) || totalActiveForDay || totalAppsForState(day) || totalBatchForState(day)) return key;
+  }
+  return DATES[0].key;
+}
+
+function updateSheetStatus() {
+  const statusEl = document.getElementById('sheet-status');
+  const bannerEl = document.getElementById('source-banner-text');
+  if (!statusEl || !bannerEl) return;
+
+  if (sheetSourceMeta.status === 'loading') {
+    statusEl.textContent = 'Loading latest Google Sheet data...';
+    bannerEl.textContent = 'Loading latest spreadsheet data...';
+    return;
+  }
+
+  if (sheetSourceMeta.status === 'error') {
+    statusEl.textContent = 'Sheet load failed';
+    bannerEl.textContent = `Could not load the Google Sheet. Showing fallback data. ${sheetSourceMeta.error}`;
+    return;
+  }
+
+  const timestamp = sheetSourceMeta.loadedAt
+    ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(sheetSourceMeta.loadedAt)
+    : 'just now';
+  statusEl.textContent = `Source: Google Sheet, loaded ${timestamp}`;
+  bannerEl.textContent = `This dashboard is read-only and loads from the shared Google Sheet. Use "Reload From Sheet" after the spreadsheet changes. Last loaded ${timestamp}.`;
+}
+
+async function reloadFromSheet(showToastOnSuccess = false) {
+  sheetSourceMeta = { status: 'loading', loadedAt: sheetSourceMeta.loadedAt, error: '' };
+  updateSheetStatus();
+
+  try {
+    const response = await fetch(SHEET_CSV_URL, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const csvText = await response.text();
+    STATE = parseSheetState(csvText);
+    currentDate = latestDateWithData(STATE);
+    sheetSourceMeta = { status: 'ready', loadedAt: new Date(), error: '' };
+    renderDateStrip();
+    renderCurrentTab();
+    updateDashboard();
+    updateSheetStatus();
+    if (showToastOnSuccess) showToast('Reloaded from Google Sheet');
+  } catch (error) {
+    sheetSourceMeta = { status: 'error', loadedAt: sheetSourceMeta.loadedAt, error: error.message };
+    updateSheetStatus();
+    if (showToastOnSuccess) showToast('Could not load Google Sheet');
+  }
+}
+
+function applyReadOnlyMode(containerId) {
+  if (EDITABLE) return;
+  const root = document.getElementById(containerId);
+  if (!root) return;
+
+  root.querySelectorAll('input').forEach(input => {
+    input.readOnly = true;
+    input.tabIndex = -1;
+  });
+  root.querySelectorAll('.btn-del').forEach(button => button.remove());
+  root.querySelectorAll('[data-edit-only]').forEach(node => node.remove());
 }
 
 // ═══════════════════════════════════════════════
@@ -553,9 +869,7 @@ function renderOpsTab() {
 
   const campRows = camps.map(c => `
     <tr>
-      <td style="font-family:var(--fh);font-size:14px;font-weight:600">${c.label}
-        <button class="btn btn-del btn-sm" style="margin-left:8px" onclick="removeCampaign('${c.id}')">✕</button>
-      </td>
+      <td style="font-family:var(--fh);font-size:14px;font-weight:600">${c.label}</td>
       <td class="r"><input class="ni" type="number" id="t1-${c.id}" value="${n(d.target?.[c.id])}" oninput="recalc()"></td>
     </tr>`).join('');
 
@@ -576,7 +890,7 @@ function renderOpsTab() {
           <tr class="tr"><td>TOTAL TARGET</td><td class="r" id="t1-total">0</td></tr>
         </tbody>
       </table>
-      <div style="margin-top:12px">
+      <div style="margin-top:12px" data-edit-only>
         <button class="btn btn-ol btn-sm" onclick="openModal('camp-modal');document.getElementById('camp-name-input').value=''">+ Add Campaign / Project</button>
       </div>
     </div>
@@ -619,6 +933,7 @@ function renderOpsTab() {
     </div>`;
 
   recalcDisplayOnly();
+  applyReadOnlyMode('ops-content');
 }
 
 // ═══════════════════════════════════════════════
@@ -651,7 +966,7 @@ function renderRecruitmentTab() {
   const appRows = sources.map(src => {
     const elId = 't5-' + src.replace(/[^a-z0-9]/gi,'_');
     return `<tr>
-      <td>${src} <button class="btn btn-del btn-sm" style="margin-left:6px" onclick="removeSource('${src.replace(/'/g,"\\'")}')">✕</button></td>
+      <td>${src}</td>
       <td class="r"><input class="ni" type="number" id="${elId}" value="${n(d.applications?.[src])}" oninput="recalc()"></td>
     </tr>`;
   }).join('');
@@ -693,7 +1008,7 @@ function renderRecruitmentTab() {
           <tr class="tr"><td>TOTAL APPLICATIONS</td><td class="r" id="t5-total">0</td></tr>
         </tbody>
       </table>
-      <div style="margin-top:12px">
+      <div style="margin-top:12px" data-edit-only>
         <button class="btn btn-ol btn-sm" onclick="openModal('source-modal');document.getElementById('source-name-input').value=''">+ Add Job Board / Source</button>
       </div>
     </div>
@@ -709,6 +1024,7 @@ function renderRecruitmentTab() {
     </div>`;
 
   recalcDisplayOnly();
+  applyReadOnlyMode('recruitment-content');
 }
 
 // ═══════════════════════════════════════════════
@@ -733,7 +1049,7 @@ function renderTraineesTab() {
           <div class="batch-date">Started: ${b.startDate}</div>
           ${dl ? `<div class="batch-day-badge ${dl.cls}">${dl.text}</div>` : `<div class="batch-day-badge day-future">Starts ${b.startDate}</div>`}
         </div>
-        <button class="btn btn-del btn-sm" onclick="removeBatch('${b.id}')">✕</button>
+        <button class="btn btn-del btn-sm" data-edit-only onclick="removeBatch('${b.id}')">✕</button>
       </div>
       ${dl ? `<div style="margin-top:8px">
         <div style="font-family:var(--fh);font-size:10px;letter-spacing:1px;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Trainees on ${currentDate}</div>
@@ -764,7 +1080,7 @@ function renderTraineesTab() {
   document.getElementById('trainees-content').innerHTML = `
     <div class="card">
       <div class="card-head">Training Batches — Management
-        <button class="btn btn-pr btn-sm" onclick="openModal('batch-modal');document.getElementById('batch-name-input').value='';document.getElementById('batch-start-input').value='${currentDate}'">+ Add Batch</button>
+        <button class="btn btn-pr btn-sm" data-edit-only onclick="openModal('batch-modal');document.getElementById('batch-name-input').value='';document.getElementById('batch-start-input').value='${currentDate}'">+ Add Batch</button>
       </div>
       <div class="alert info" style="margin-bottom:16px">ℹ️ Training extends to Day 12+ when trainees need more time to pass. Multiple overlapping batches are shown simultaneously. Batches highlighted in <span style="color:var(--amber)">amber</span> (Day 8–12) and <span style="color:var(--red)">red</span> (Day 13+) are in extended training.</div>
       <div class="batch-grid">${batchCards || '<div style="color:var(--text3);font-size:13px">No batches defined. Add a batch to get started.</div>'}</div>
@@ -786,6 +1102,7 @@ function renderTraineesTab() {
 
   // Local batch chart
   setTimeout(() => renderBatchChart(), 50);
+  applyReadOnlyMode('trainees-content');
 }
 
 function renderBatchChart() {
@@ -1197,10 +1514,12 @@ function showToast(msg) {
 // ═══════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  updateSheetStatus();
   renderDateStrip();
   updateDashboard();
   setTimeout(initCharts, 80);
+  await reloadFromSheet(false);
 
   // Keyboard date navigation
   document.addEventListener('keydown', e => {
